@@ -4,10 +4,13 @@ using UnityEngine;
 
 public class playerBehavior : MonoBehaviour
 {
-    public float speed;
-    public float jumpPower;
-    public float jumpLength;
-    public float jumpJuice;
+    public float speed; //speed mult
+    public float jumpPower; //power mult
+    public float jumpLength;//how "long" the boost from the jump lasts
+    private float jumpJuice;//how long of the boost remains; working variable
+
+    public float floorDetDist; //how long is our floor detection ray
+    public float wallDetDist; //how long is our wall detection ray (this should just be the local height of the player but hey y'never know)
 
     public float gravityMultiplier;
     public float dragX;
@@ -22,8 +25,13 @@ public class playerBehavior : MonoBehaviour
     public Sprite idleSprite;
 
     float moveDir = 1; // -1 left, 0 none, 1 right
+    float wallRayHeading; // left or right detached from motioncode for walljump logic
+    public float headingMul;    //how far out the ray should be cast
+
     public bool onFloor;
-    public static bool faceRight = true;
+    public bool isWallSliding;  //public for debug purposes; will private these later lol
+
+    public static bool faceRight = true;    //sprite heading
 
     void Start()
     {
@@ -33,11 +41,15 @@ public class playerBehavior : MonoBehaviour
     }
 
     void FixedUpdate()
-    {
-        if(onFloor && Mathf.Abs(myBody.velocity.y) > 0.01){     //this introduces a really weird mechanical quirk that says you can walljump
-            onFloor = false;
-        }
+    {  
+        //if(onFloor && Mathf.Abs(myBody.velocity.y) > 0.01){
+        //    onFloor = false;
+        //}
+        if(faceRight){
+            wallRayHeading = headingMul;
+        }else wallRayHeading = -headingMul;
 
+        handleFloorWall();
         checkKeys();
         handleMotion();
         jumpPhysics();
@@ -58,7 +70,8 @@ public class playerBehavior : MonoBehaviour
         if(Input.GetKey(KeyCode.W) && onFloor){
             jumpJuice = jumpLength;
             onFloor = false;
-        } else if(Input.GetKey(KeyCode.W) && jumpJuice > 0){
+        } 
+        if(Input.GetKey(KeyCode.W) && jumpJuice > 0){
             myBody.velocity += new Vector2(0, jumpPower * jumpJuice/jumpLength);
             jumpJuice--;
         } else if(!Input.GetKey(KeyCode.W) && jumpJuice > jumpJuice/0.6){
@@ -99,6 +112,31 @@ public class playerBehavior : MonoBehaviour
         } else{
             myRenderer.sprite = idleSprite;
         }
+    }
+
+    void handleFloorWall(){
+        //floor first, then wall; we want walljump bools to generate properly if we're smashing against the wall AND in midair
+        //in other words, we can't just be next to a wall; we have to be moving towards it to trigger the wallslide
+        
+        Vector2 Xoffset = new Vector2(transform.position.x + (transform.localScale.x/2), transform.position.y - floorDetDist);  //this tells us what offset we use
+        RaycastHit2D floorDet = Physics2D.Raycast(Xoffset, new Vector2(-1, 0), transform.localScale.x);
+        if(floorDet.collider != null){
+            Debug.Log(floorDet.collider.tag);
+            if(floorDet.collider.tag == "Floor" || floorDet.collider.tag == "MovingPlatform"){
+                onFloor = true;
+            } else{
+                onFloor = false;
+            }
+        } else{
+            onFloor = false;
+        }
+
+        //floor debug ray
+        Debug.DrawRay(Xoffset, new Vector2(-transform.localScale.x, 0), Color.green);
+
+        Xoffset = new Vector2 (transform.position.x - (transform.localScale.x * wallRayHeading), transform.position.y + (transform.localScale.y/2));
+        RaycastHit2D wallDet = Physics2D.Raycast(Xoffset, new Vector2(0, -1), wallDetDist);
+        Debug.DrawRay(Xoffset, new Vector2(0, -wallDetDist), Color.green);
     }
 
     void OnCollisionEnter2D(Collision2D other)

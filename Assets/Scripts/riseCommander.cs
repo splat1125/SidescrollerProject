@@ -68,11 +68,29 @@ public class riseCommander : MonoBehaviour
             //i hate how long this line is ^ why do transform positions need to be so long
         }
     }
-    void OnCollisionStay2D(Collision2D other)
+    void OnCollisionEnter2D(Collision2D other)
+    {
+        if(other.gameObject.tag == "Player" && active){
+            Debug.Log("I am trying to move the player now!");
+            //other.gameObject.transform.position = new Vector3(other.gameObject.transform.position.x + (dirX * tgtVector.x * speed * Time.deltaTime), other.gameObject.transform.position.y + (dirY * tgtVector.y * speed * Time.deltaTime), other.gameObject.transform.position.z);
+            other.transform.parent = transform;
+        }
+    }
+    void OnCollisionExit2D(Collision2D other)
+    {
+        if(other.gameObject.tag == "Player" && active){
+            Debug.Log("I am trying to move the player now!");
+            //other.gameObject.transform.position = new Vector3(other.gameObject.transform.position.x + (dirX * tgtVector.x * speed * Time.deltaTime), other.gameObject.transform.position.y + (dirY * tgtVector.y * speed * Time.deltaTime), other.gameObject.transform.position.z);
+            other.transform.parent = null;
+        }
+    }
+    /*void OnCollisionStay2D(Collision2D other)
     {
         if(other.gameObject.tag == "Player" && active){
             Debug.Log("I am trying to move the player now!");
             other.gameObject.transform.position = new Vector3(other.gameObject.transform.position.x + (dirX * tgtVector.x * speed * Time.deltaTime), other.gameObject.transform.position.y + (dirY * tgtVector.y * speed * Time.deltaTime), other.gameObject.transform.position.z);
+            //problem: how do we do this before gravity kicks in so the player stays "parented" to the platform
+            //should i just parent the player to the platform? that doesn't really make any sense at all since it wouldn't really translate them right
         }
-    }
+    }*/
 }
