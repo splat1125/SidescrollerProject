@@ -5,6 +5,10 @@ using UnityEngine;
 public class playerBehavior : MonoBehaviour
 {
     public float speed; //speed mult
+    public float groundSpeed;
+    public float groundSpeedLim;
+    public float groundDrag;
+
     public float jumpPower; //power mult
     public float jumpLength;//how "long" the boost from the jump lasts
     private float jumpJuice;//how long of the boost remains; working variable
@@ -12,9 +16,6 @@ public class playerBehavior : MonoBehaviour
     public float wJumpPower; //power mult (wall jump)
     public float wJumpLength;//how "long" the boost from the jump lasts
     private float wJumpJuice;//how long of the boost remains; working variable
-
-    public float airDragMul; //less air control but higher speeds possible while bhopping
-    public float airSpeedMul; //hard to make this work this way; definitely something i need to look into
 
     public float floorDetDist; //how long is our floor detection ray
     public float wallDetDist; //how long is our wall detection ray (this should just be the local height of the player but hey y'never know)
@@ -43,6 +44,7 @@ public class playerBehavior : MonoBehaviour
     public float headingMul;    //how far out the ray should be cast
 
     public bool onFloor;
+    public float floorTime;
     public bool isWallSliding;  //public for debug purposes; will private these later lol
 
     public static bool faceRight = true;    //sprite heading
@@ -54,11 +56,19 @@ public class playerBehavior : MonoBehaviour
         myRenderer = gameObject.GetComponent<SpriteRenderer>();
     }
 
+    void Update()
+    {
+        checkJump();    //keydown/up only works in update ok
+    }
+
     void FixedUpdate()
     {  
         if(gameObject.transform.position.y < -10){
             gameObject.transform.position = new Vector2(0, 0);
         }
+        if(onFloor){
+            floorTime++;    //number of fixed frames since we've been on the ground
+        } else floorTime = 0;
 
         handleFloorWall();
         checkKeys();
@@ -66,37 +76,51 @@ public class playerBehavior : MonoBehaviour
         jumpPhysics();
         handleSprites();
     }
+//----------------------------------------------------------------------------------------------------------------------
+
+    void checkJump()
+    {
+        if(Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)){
+            if(onFloor){    //initiation is keydown
+                jumpJuice = jumpLength;
+                onFloor = false;
+            } else if(isWallSliding){
+                wJumpJuice = wJumpLength;
+                isWallSliding = false;
+            }
+        }  
+    }
 
     void checkKeys()
     {
-        if(Input.GetKey(KeyCode.RightArrow)){
+        if(Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)){    //these lines essentially tell us if we are moving left or right or whatever
             moveDir = 1;
             faceRight = false;
-        } else if(Input.GetKey(KeyCode.LeftArrow)){
+        } else if(Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)){
             moveDir = -1;
             faceRight = true;
         } else{
             moveDir = 0;
         }
-        if(Input.GetKey(KeyCode.Space) && onFloor){
-            jumpJuice = jumpLength;
-            onFloor = false;
-        } else if(Input.GetKey(KeyCode.Space) && isWallSliding){    //handling wall jump
-            wJumpJuice = wJumpLength;
-            isWallSliding = false;
+    
+        if(Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)){
+            if(jumpJuice > 0){
+                myBody.velocity += new Vector2(0, jumpPower * jumpJuice/jumpLength);
+                jumpJuice--;
+            }
+        } else if(!Input.GetKey(KeyCode.Space) || !Input.GetKey(KeyCode.W) || !Input.GetKey(KeyCode.UpArrow)){
+            if(jumpJuice > jumpJuice/0.6){
+                myBody.velocity += new Vector2(0, jumpPower * jumpJuice/jumpLength);
+                jumpJuice--;
+            } else if(jumpJuice > 0){
+                jumpJuice = 0;
+            }
         }
-        if(Input.GetKey(KeyCode.Space) && jumpJuice > 0){
-            myBody.velocity += new Vector2(0, jumpPower * jumpJuice/jumpLength);
-            jumpJuice--;
-        } else if(!Input.GetKey(KeyCode.Space) && jumpJuice > jumpJuice/0.6){
-            myBody.velocity += new Vector2(0, jumpPower * jumpJuice/jumpLength);
-            jumpJuice--;
-        } else if(!Input.GetKey(KeyCode.Space) && jumpJuice > 0){
-            jumpJuice = 0;
-        }
-        if(Input.GetKey(KeyCode.Space) && wJumpJuice > 0 && jumpJuice == 0){   //handling wall jump
-            Vector2 wallJumpDir = new Vector2(-moveDir, 1).normalized * wJumpPower;
-            myBody.velocity += wallJumpDir;
+        if(Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)){   //handling wall jump
+            if(wJumpJuice > 0 && jumpJuice == 0){
+                Vector2 wallJumpDir = new Vector2(-moveDir, 2).normalized * wJumpPower;
+                myBody.velocity += wallJumpDir;
+            }
             if(myBody.velocity.y >= 4f * wJumpPower){
                 myBody.velocity = new Vector2(myBody.velocity.x, 4f * wJumpPower);
             }
@@ -104,10 +128,6 @@ public class playerBehavior : MonoBehaviour
         } else if(!Input.GetKey(KeyCode.Space) && wJumpJuice > 0){
             wJumpJuice = 0;
         }
-        
-        /*if(Input.GetKey(KeyCode.W) && onFloor){
-            myBody.velocity = new Vector2(myBody.velocity.x, jumpPower);
-        }*/
     }
 
     void jumpPhysics(){
@@ -119,14 +139,22 @@ public class playerBehavior : MonoBehaviour
 
     void handleMotion()
     {  
-        //horizontal drag
+        //horizontal motion, ground, 2.0
         if(onFloor){
+            myBody.velocity += new Vector2(moveDir * groundSpeed, 0);   //specific speed and drag for ground motion, speed not limited by drag but a hard limiter
+            if(moveDir == 0){
+                myBody.velocity = new Vector2(myBody.velocity.x * groundDrag, myBody.velocity.y);
+            }
+            if(Mathf.Abs(myBody.velocity.x) >= groundSpeedLim && floorTime >= 10){    //ONLY if we're on the ground for over 5fr can we suffer limiting
+                myBody.velocity = new Vector2(myBody.velocity.x * groundDrag, myBody.velocity.y);//does drag fix it?
+                myBody.velocity = new Vector2(moveDir * groundSpeedLim, myBody.velocity.y);//if no, then floor it
+            }
+        } else{
             myBody.velocity = new Vector2(myBody.velocity.x * dragX, myBody.velocity.y);
             myBody.velocity += new Vector2(moveDir * speed, 0);
-        } else{
-            myBody.velocity = new Vector2(myBody.velocity.x * dragX * airDragMul, myBody.velocity.y);
-            myBody.velocity += new Vector2(moveDir * speed * airSpeedMul, 0);
         }
+        //horizontal motion - old/air
+        
     }
 
     void handleSprites(){
